@@ -1,0 +1,41 @@
+# ROS 2 build output
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Data — big, and regenerable from the robot. Keep the bags off git.
+data/bags/*
+!data/bags/.gitkeep
+data/frames/*
+!data/frames/.gitkeep
+data/dataset/
+
+# Model artefacts. Weights and engines are too big for git; the .onnx is the
+# one worth keeping if you must keep something. Engines are device-specific
+# and must never be committed — they will not load on another machine.
+models/runs/
+models/baseline/*.pt
+models/exported/*.onnx
+models/exported/*.engine
+models/exported/*.trtexec.log
+!models/benchmarks/*.csv
+!models/benchmarks/*.md
+!models/benchmarks/*.png
+
+# COMMIT THESE (they are small and you will cry if you lose them):
+#   ros2_ws/src/limo_project_bringup/maps/classroom.pgm
+#   ros2_ws/src/limo_project_bringup/maps/classroom.yaml
+#   ros2_ws/src/limo_project_bringup/config/mission_params.yaml
+
+# OS
+.DS_Store
+
+docs/
+CLAUDE.md
+README.md

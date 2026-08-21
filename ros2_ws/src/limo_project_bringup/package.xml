@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>limo_project_bringup</name>
+  <version>0.1.0</version>
+  <description>Launch files, parameters, maps and RViz config for the LIMO Pro
+  perception-driven navigation project.</description>
+  <maintainer email="sirbum605@gmail.com">Cezar</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>limo_perception</exec_depend>
+  <exec_depend>limo_people</exec_depend>
+  <exec_depend>limo_mission</exec_depend>
+  <exec_depend>limo_dashboard</exec_depend>
+  <exec_depend>limo_mission_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

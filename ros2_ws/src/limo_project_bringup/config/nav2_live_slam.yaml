@@ -1,0 +1,363 @@
+# nav2 parameters for LIVE-SLAM operation (cartographer builds the map as we
+# drive; there is no map_server and no AMCL).
+#
+# This is a verbatim copy of AgileX's tuned
+#   ~/limo_ros2_ws/src/limo_ros2/limo_bringup/param/nav2.yaml
+# taken 2026-08-26, so their controller/planner/costmap tuning is preserved
+# exactly. We keep our own copy rather than editing theirs in place: their
+# workspace is not tracked by this repo and is lost the moment we swap robots.
+#
+# The amcl / amcl_map_client / amcl_rclcpp_node / map_server sections below are
+# deliberately LEFT IN even though those nodes never start. A ROS 2 parameter
+# file is keyed by node name, so sections for nodes that do not exist are
+# simply never read. Deleting them would mean hand-editing tuned YAML for no
+# functional gain, and would make diffing against AgileX's original harder.
+#
+# What actually differs from stock is applied at launch time by
+# launch/nav2_live_slam.launch.py, not here:
+#   - only nav2_bringup/navigation_launch.py is included, so map_server and
+#     amcl are never spawned and are absent from the lifecycle manager's
+#     node_names list
+#   - map_subscribe_transient_local is passed as a launch argument so the
+#     costmap static layers match cartographer's /map publisher QoS
+#
+# Two things to know if the global costmap ever comes up empty:
+#   1. /map QoS mismatch -- see the launch argument above.
+#   2. global_costmap must NOT use a rolling window. With live SLAM the map
+#      grows and its origin moves; the static layer has to track that. Stock
+#      already has rolling_window absent (false) for global_costmap and true
+#      for local_costmap, which is what we want. Do not "fix" that.
+
+amcl:
+  ros__parameters:
+    use_sim_time: False
+    # Stock 0.2 across the board assumes decent wheel odometry. This is a
+    # skid-steer LIMO whose yaw slips whenever it turns -- cartographer had to
+    # apply 4.2 deg of correction over a single 7 m run. Under-modelling that
+    # noise makes AMCL over-trust odometry and refuse to be corrected by the
+    # scan. Raise the rotational terms most.
+    alpha1: 0.5
+    alpha2: 0.5
+    alpha3: 0.3
+    alpha4: 0.3
+    alpha5: 0.2
+    base_frame_id: "base_link"
+    beam_skip_distance: 0.5
+    beam_skip_error_threshold: 0.9
+    beam_skip_threshold: 0.3
+    do_beamskip: false
+    global_frame_id: "map"
+    lambda_short: 0.1
+    laser_likelihood_max_dist: 2.0
+    # Explicit, not -1/100. This YDLIDAR publishes 247 bins across a 220 deg
+    # arc but only ~123 real samples land in them -- the other 124 come out as
+    # exactly 0.0. Left at -1.0 ("use the scan header") those zeros risk being
+    # taken as valid zero-distance hits and poison the likelihood field on
+    # every update, which looks exactly like AMCL being fine when handed a
+    # pose and degrading as it integrates scans. 12 m is the real sensor max;
+    # 100 m invented range the lidar cannot measure.
+    laser_max_range: 12.0
+    laser_min_range: 0.05
+    laser_model_type: "likelihood_field"
+    # The YDLIDAR gives 247 bins of which only ~123 carry a real sample; the
+    # rest are exactly 0.0 and get filtered. Subsampling to 60 then threw away
+    # half of what survived. Lateral position in a corridor is constrained
+    # almost entirely by side returns, and starving that is why AMCL drifted
+    # 0.75 m sideways over 5 m and drove the robot under a table. Use them all.
+    max_beams: 240
+    max_particles: 2000
+    min_particles: 500
+    odom_frame_id: "odom"
+    pf_err: 0.05
+    pf_z: 0.99
+    recovery_alpha_fast: 0.0
+    recovery_alpha_slow: 0.0
+    resample_interval: 1
+    robot_model_type: "differential"
+    save_pose_rate: 0.5
+    sigma_hit: 0.2
+    tf_broadcast: true
+    transform_tolerance: 1.0
+    # Correct more often. At 0.25 m the robot travels a quarter of a metre
+    # between scan updates, which is a lot of unchecked odometry on a chassis
+    # that slips.
+    update_min_a: 0.1
+    update_min_d: 0.15
+    # z_rand 0.5 says half of every reading may be random noise, which flattens
+    # the likelihood field and weakens the pull toward the correct pose. This
+    # lidar is noisy in coverage, not in range: the samples it does return are
+    # accurate. Sharpen accordingly.
+    z_hit: 0.8
+    z_max: 0.05
+    z_rand: 0.2
+    z_short: 0.05
+
+amcl_map_client:
+  ros__parameters:
+    use_sim_time: False
+
+amcl_rclcpp_node:
+  ros__parameters:
+    use_sim_time: False
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: False
+    global_frame: map
+    robot_base_frame: base_link
+    odom_topic: /odom
+    default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
+    plugin_lib_names:
+    - nav2_compute_path_to_pose_action_bt_node
+    - nav2_follow_path_action_bt_node
+    - nav2_back_up_action_bt_node
+    - nav2_spin_action_bt_node
+    - nav2_wait_action_bt_node
+    - nav2_clear_costmap_service_bt_node
+    - nav2_is_stuck_condition_bt_node
+    - nav2_goal_reached_condition_bt_node
+    - nav2_goal_updated_condition_bt_node
+    - nav2_initial_pose_received_condition_bt_node
+    - nav2_reinitialize_global_localization_service_bt_node
+    - nav2_rate_controller_bt_node
+    - nav2_distance_controller_bt_node
+    - nav2_speed_controller_bt_node
+    - nav2_recovery_node_bt_node
+    - nav2_pipeline_sequence_bt_node
+    - nav2_round_robin_node_bt_node
+    - nav2_transform_available_condition_bt_node
+    - nav2_time_expired_condition_bt_node
+    - nav2_distance_traveled_condition_bt_node
+
+bt_navigator_rclcpp_node:
+  ros__parameters:
+    use_sim_time: False
+
+controller_server:
+  ros__parameters:
+    use_sim_time: False
+    controller_frequency: 10.0
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    controller_plugins: ["FollowPath"]
+
+    # DWB parameters
+    FollowPath:
+      plugin: "dwb_core::DWBLocalPlanner"
+      debug_trajectory_details: True
+      min_vel_x: 0.0
+      min_vel_y: 0.0
+      max_vel_x: 0.22
+      max_vel_y: 0.0
+      max_vel_theta: 0.8
+      min_speed_xy: 0.0
+      max_speed_xy: 0.44
+      min_speed_theta: 0.0
+      # Add high threshold velocity for turtlebot 3 issue.
+      # https://github.com/ROBOTIS-GIT/turtlebot3_simulations/issues/75
+      acc_lim_x: 2.5
+      acc_lim_y: 0.0
+      acc_lim_theta: 0.2
+      decel_lim_x: -0.5
+      decel_lim_y: 0.0
+      decel_lim_theta: -0.5
+      vx_samples: 20
+      vy_samples: 0
+      vtheta_samples: 40
+      sim_time: 1.5
+      linear_granularity: 0.05
+      angular_granularity: 0.025
+      transform_tolerance: 0.2
+      xy_goal_tolerance: 0.05
+      trans_stopped_velocity: 0.25
+      short_circuit_trajectory_evaluation: True
+      stateful: True
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
+      BaseObstacle.scale: 0.02
+      PathAlign.scale: 32.0
+      PathAlign.forward_point_distance: 0.1
+      GoalAlign.scale: 24.0
+      GoalAlign.forward_point_distance: 0.1
+      PathDist.scale: 32.0
+      GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
+
+controller_server_rclcpp_node:
+  ros__parameters:
+    use_sim_time: False
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      # 5/2 Hz meant an obstacle appearing in front of the robot took up to
+      # 200 ms to enter the costmap and 500 ms to be published. Combined with
+      # the 1 Hz global replan below, avoidance looked like "notice, stop,
+      # think, then move" instead of flowing around. 10/5 costs almost nothing
+      # on the Orin -- the local costmap is only 60x60 cells.
+      update_frequency: 10.0
+      publish_frequency: 5.0
+      global_frame: odom
+      robot_base_frame: base_link
+      use_sim_time: False
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      footprint: "[[0.15,0.10],[0.15,-0.10],[-0.15,-0.10],[-0.15,0.10]]"
+      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        # 0.02 was smaller than the robot half-width (0.10), so the planner
+        # would route a path 2 cm from a chair leg, the body would not fit, the
+        # controller would stall and a recovery would fire. Measured: 9
+        # recoveries crossing 2.5 m past one unmapped chair. Robot half-diagonal
+        # is sqrt(0.15^2 + 0.10^2) = 0.18, so inflate just past that and keep a
+        # gradient to steer along. A 2 m aisle still leaves ~1.5 m usable.
+        inflation_radius: 0.25
+        cost_scaling_factor: 3.0
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /intel_realsense_r200_depth/points
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+      static_layer:
+        map_subscribe_transient_local: True
+      always_send_full_costmap: True
+  local_costmap_client:
+    ros__parameters:
+      use_sim_time: False
+  local_costmap_rclcpp_node:
+    ros__parameters:
+      use_sim_time: False
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      # 1 Hz is the stock value and it is why replanning around a new obstacle
+      # looked delayed: the global costmap only learned about it once a second,
+      # so the planner could not route around something it had not yet been
+      # told about.
+      update_frequency: 2.0
+      publish_frequency: 2.0
+      global_frame: map
+      robot_base_frame: base_link
+      use_sim_time: False
+      footprint: "[[0.15,0.10],[0.15,-0.10],[-0.15,-0.10],[-0.15,0.10]]"
+      resolution: 0.05
+      plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+      voxel_layer:
+        plugin: "nav2_costmap_2d::VoxelLayer"
+        enabled: True
+        publish_voxel_map: True
+        origin_z: 0.0
+        z_resolution: 0.05
+        z_voxels: 16
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /intel_realsense_r200_depth/points
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 3.0
+        inflation_radius: 0.25
+      always_send_full_costmap: True
+  global_costmap_client:
+    ros__parameters:
+      use_sim_time: False
+  global_costmap_rclcpp_node:
+    ros__parameters:
+      use_sim_time: False
+
+map_server:
+  ros__parameters:
+    use_sim_time: False
+    yaml_filename: "turtlebot3_world.yaml"
+
+map_saver:
+  ros__parameters:
+    use_sim_time: False
+    save_map_timeout: 5000
+    free_thresh_default: 0.25
+    occupied_thresh_default: 0.65
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 20.0
+    use_sim_time: False
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_navfn_planner/NavfnPlanner"
+      tolerance: 0.5
+      use_astar: false
+      allow_unknown: true
+
+planner_server_rclcpp_node:
+  ros__parameters:
+    use_sim_time: False
+
+recoveries_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    recovery_plugins: ["spin", "backup", "wait"]
+    spin:
+      plugin: "nav2_recoveries/Spin"
+    backup:
+      plugin: "nav2_recoveries/BackUp"
+    wait:
+      plugin: "nav2_recoveries/Wait"
+    global_frame: odom
+    robot_base_frame: base_link
+    transform_timeout: 0.1
+    use_sim_time: False
+    simulate_ahead_time: 2.0
+    max_rotational_vel: 1.0
+    min_rotational_vel: 0.4
+    rotational_acc_lim: 3.2
+
+robot_state_publisher:
+  ros__parameters:
+    use_sim_time: False

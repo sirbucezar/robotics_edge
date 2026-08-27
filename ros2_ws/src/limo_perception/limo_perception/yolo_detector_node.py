@@ -119,7 +119,12 @@ class YoloDetectorNode(Node):
         kwargs = dict(imgsz=int(self.get_parameter("imgsz").value),
                       conf=float(self.get_parameter("conf").value),
                       iou=float(self.get_parameter("iou").value),
-                      classes=(0,))
+                      # person (0) AND chair (56). The mission only counts
+                      # people, but a dashboard that draws a labelled chair box
+                      # next to a labelled person box shows an examiner the
+                      # model is discriminating, not guessing. Downstream
+                      # filtering by label keeps the counting unchanged.
+                      classes=(0, 56))
 
         errors = []
         for i, name in enumerate(wanted):

@@ -53,11 +53,19 @@ yolo_detector:
   ros__parameters:
     backend: "tensorrt"
     fallback_backends: ["onnxruntime", "ultralytics"]
-    model_path: "/home/agilex/limo_project/models/exported/person_yolov8n_int8.engine"
+    # Stock COCO yolov8n, FP16, 416. Measured on this robot 2026-08-26 with
+    # clocks pinned: 5.02 ms inference (199 FPS), 13.75 ms end-to-end (73 FPS),
+    # p95 5.05 ms. Comfortably past the 50 FPS rubric line with no latency
+    # tail. The fallback chain walks down to formats that need no engine at
+    # all, so a corrupt or version-mismatched .engine degrades instead of
+    # taking the detector down.
+    model_path: "/home/agilex/limo_project/models/exported/yolov8n_416_fp16.engine"
     fallback_model_paths:
-      - "/home/agilex/limo_project/models/exported/person_yolov8n.onnx"
-      - "/home/agilex/limo_project/models/baseline/yolov8n.pt"
-    imgsz: 640
+      - "/home/agilex/limo_project/models/exported/yolov8n_416_fp32.engine"
+      - "/home/agilex/limo_project/models/exported/yolov8n_416.onnx"
+    # Must match the engine: the .engine is built at a fixed 416x416 input and
+    # will not accept 640 tensors.
+    imgsz: 416
     conf: 0.35
     iou: 0.45
     device: "cuda:0"
@@ -130,6 +138,24 @@ dashboard:
     jpeg_quality: 70
     stream_max_width: 640
     stream_rate_hz: 12.0
+
+    # Browser WASD teleop. Exists because the AgileX phone app cannot always
+    # reach the robot on a school network, and cartographer needs a manually
+    # driven seed map before nav2 has anywhere to plan.
+    #
+    # Deliberately slow: mapping quality is better at low speed, and this is
+    # driven from a laptop with network latency in the loop.
+    #
+    # teleop_timeout_s is the deadman. The browser resends while a key is
+    # held; if commands stop arriving -- key released, tab closed, WiFi
+    # dropped -- the node publishes one zero Twist and then goes silent,
+    # handing /cmd_vel back to nav2. Raising it makes the robot coast longer
+    # after contact is lost.
+    teleop_enabled: true
+    teleop_max_vx: 0.15
+    teleop_max_wz: 0.25
+    teleop_timeout_s: 0.4
+    teleop_rate_hz: 10.0
     waypoints: [1.5, 0.0, 0.0,
                 3.0, 1.0, 90.0,
                 3.0, -1.0, -90.0,

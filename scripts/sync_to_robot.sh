@@ -15,7 +15,11 @@
 set -euo pipefail
 
 LIMO_USER="${LIMO_USER:-agilex}"
-LIMO_HOST="${LIMO_HOST:-limo.local}"
+# Default to the "limo" ssh alias rather than limo.local: mDNS does not
+# resolve on the school network, and going through ~/.ssh/config means
+# swapping robots is a one-line HostName change instead of touching every
+# script. Override with LIMO_HOST=<ip> when there is no alias.
+LIMO_HOST="${LIMO_HOST:-limo}"
 REMOTE_DIR="${REMOTE_DIR:-/home/${LIMO_USER}/limo_project}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

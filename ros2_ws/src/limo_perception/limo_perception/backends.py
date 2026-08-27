@@ -86,6 +86,11 @@ def nms(boxes, scores, iou_threshold):
     return keep
 
 
+# Only the COCO ids this project ever asks for. A full 80-entry table would
+# imply the stack understands classes it never requests.
+COCO_LABELS = {0: "person", 56: "chair"}
+
+
 def decode_yolo_output(raw, r, pad_left, pad_top, conf, iou, classes, img_shape):
     """Decode a YOLOv8/YOLO11 raw head: (1, 4+nc, num_anchors)."""
     pred = raw[0] if raw.ndim == 3 else raw
@@ -126,7 +131,8 @@ def decode_yolo_output(raw, r, pad_left, pad_top, conf, iou, classes, img_shape)
     for i in keep:
         out.append((int(x1[i]), int(y1[i]),
                     int(x2[i] - x1[i]), int(y2[i] - y1[i]),
-                    float(scores[i]), "person" if class_ids[i] == 0 else str(int(class_ids[i]))))
+                    float(scores[i]), COCO_LABELS.get(int(class_ids[i]),
+                                           str(int(class_ids[i])))))
     return out
 
 
@@ -225,15 +231,36 @@ class TensorRTBackend(BaseBackend):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # TensorRT 8.5's Python bindings still do `bool: np.bool` at import
+        # time. numpy removed that alias in 1.24 and JetPack 5.x ships 1.24.4,
+        # so `import tensorrt` dies with "module 'numpy' has no attribute
+        # 'bool'" before we get anywhere near an engine. Restoring the alias is
+        # the least invasive fix available: downgrading numpy would drag ROS's
+        # own numpy dependency backwards, and patching a dist-packages file
+        # would not survive a reimage or travel to another robot.
+        if not hasattr(np, "bool"):
+            np.bool = bool
+
         try:
             import tensorrt as trt
             import pycuda.driver as cuda
-            import pycuda.autoinit  # noqa: F401  (creates the CUDA context)
+            import pycuda.autoinit
         except ImportError as exc:
             raise BackendError("tensorrt/pycuda not available: %s" % exc)
 
         self.trt = trt
         self.cuda = cuda
+        # A CUDA context belongs to the thread that created it. pycuda.autoinit
+        # creates one on whichever thread imports this module -- the node's main
+        # thread -- but infer() is then called from a ROS executor callback
+        # thread, where that context is not current. Every enqueue then fails
+        # with "Cuda Runtime (invalid resource handle)" while the engine itself
+        # is perfectly fine. benchmark.py never sees this because it is single
+        # threaded, which is exactly why the engine benchmarks at 199 FPS and
+        # the node cannot run a single frame.
+        #
+        # Hold the context and make it current around each inference.
+        self.cuda_ctx = pycuda.autoinit.context
         logger = trt.Logger(trt.Logger.WARNING)
         with open(self.model_path, "rb") as f, trt.Runtime(logger) as runtime:
             self.engine = runtime.deserialize_cuda_engine(f.read())
@@ -264,6 +291,14 @@ class TensorRTBackend(BaseBackend):
                 self.output_shape = shape
 
     def infer(self, bgr):
+        cuda = self.cuda
+        self.cuda_ctx.push()
+        try:
+            return self._infer_locked(bgr)
+        finally:
+            self.cuda_ctx.pop()
+
+    def _infer_locked(self, bgr):
         cuda = self.cuda
         t0 = time.perf_counter()
         canvas, r, pl, pt = letterbox(bgr, self.imgsz)

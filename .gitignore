@@ -36,6 +36,10 @@ models/exported/*.trtexec.log
 # OS
 .DS_Store
 
-docs/
-CLAUDE.md
-README.md
+# docs/ was ignored here. It contained BOTH written deliverables -- the 30%
+# optimization report and the 15% ROS2/TF documentation with frames.pdf -- so
+# the submitted repo would have been missing 45% of the grade with no error
+# message. Keep docs/ tracked; only the heavy generated artefacts are excluded.
+docs/artifacts/*.pdf.bak
+
+submission/

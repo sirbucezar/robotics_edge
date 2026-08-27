@@ -1,0 +1,82 @@
+# Room coordinate skeleton -- exam classroom, recorded 2026-08-27 while mapping.
+#
+# Axes are aligned to the CENTRAL AISLE, not to the walls: the tables sit a few
+# degrees askew to the room, and aisle alignment is what keeps every pose along
+# one rung at the same x. Verified by eye from the aisle, not fitted from lidar
+# -- an 8-point plane fit at 8 m could not resolve it.
+#
+# Frame: cartographer's `map` frame, which is the SAME frame examroom.pgm is
+# saved in, so every coordinate here is directly usable as a nav2 goal.
+#
+# The origin is the entrance start pose: cartographer was restarted with the
+# robot already standing on the spot, so start_pose is (0, 0, 0) by
+# construction and tomorrow's AMCL initial pose is the identity. No offset to
+# remember, nothing to re-derive.
+#
+#   +x = up the spine, toward the front of the room / presenter table
+#   +y = toward the LEFT wall   (right wall is negative y)
+#   yaw in degrees, 0 = facing up the spine
+#
+# Room topology is a ladder: one central spine, horizontal rungs that dead-end
+# at both outer walls. Only the top aisle spans the full width.
+
+start_pose: {x: -0.008, y: -0.008, yaw: 0.1}
+
+# --- filled in leg by leg ---
+spine_top: {x: 6.958, y: 0.735, yaw: -3.5}
+top_left:  {x: 6.511, y: 6.396, yaw: 90.4}
+top_spine: {x: 7.038, y: 1.218, yaw: -86.6}   # junction, where the 180 was done
+top_right: {x: 7.707, y: -4.059, yaw: -89.2}
+# Top aisle spans 10.46 m, 5.18 m left of spine / 5.28 m right.
+# The rung runs 6.5 deg off perpendicular to +x: the start heading is ~6.5 deg
+# left of the true aisle axis. Map is self-consistent, just rotated vs the room.
+
+# Rungs are STAGGERED: the left and right table rows are not aligned, so each
+# rung is two half-rungs meeting the spine at different x. Recorded separately.
+rungs:
+  - id: 1
+    left_spine:  {x: 5.286, y: 0.941, yaw: 91.5}
+    left:        {x: 4.631, y: 6.179, yaw: 92.3}    # arm 5.28 m
+    right_spine: {x: 5.060, y: 0.641, yaw: -85.3}
+    right:       {x: 5.549, y: -4.154, yaw: -90.3}  # arm 4.82 m -- stopped
+                                                    # ~0.6 m early, likely a
+                                                    # chair pulled into the aisle
+  - id: 2
+    left_spine:  {x: 3.744, y: 0.715, yaw: 97.6}
+    left:        {x: 2.938, y: 5.980, yaw: 88.0}    # arm 5.32 m
+    right_spine: {x: 3.424, y: 0.710, yaw: -90.4}
+    right:       {x: 4.274, y: -4.770, yaw: -90.7}  # arm 5.52 m, wall verified
+                                                    # flat and square, 0.33 m
+  - id: 3
+    left_spine:  {x: 2.379, y: 0.485, yaw: 90.1}
+    left:        {x: 1.763, y: 5.455, yaw: 90.2}    # arm 5.01 m, clearance 0.59
+    right_spine: {x: 1.929, y: 0.447, yaw: -88.6}
+    right:       {x: 2.994, y: -4.950, yaw: -89.3}  # arm 5.50 m, clearance 0.37
+  - id: 4                                           # BACK RUNG, behind the last
+    junction:    {x: 0.887, y: 0.183, yaw: 178.6}   # table row. The entrance
+    left_spine:  {x: 0.799, y: 0.172, yaw: 86.9}    # sits on this rung. Its
+    left:        {x: 0.185, y: 5.486, yaw: 89.5}    # left half is HALF THE
+    right_spine: {x: 0.017, y: 0.111, yaw: -92.5}   # WIDTH of its right half --
+    right:       {x: 0.474, y: -5.199, yaw: -92.0}  # asymmetry #2, what stops
+                                                    # AMCL picking the wrong rung
+
+end_pose: {x: -0.140, y: 0.028, yaw: -2.3}
+# Loop closure: 0.137 m and 2.4 deg against start_pose, after ~60 m over 14
+# legs. Threshold was 0.3 m. Includes the operator error of re-parking on an
+# unmarked spot by eye, so true map drift is below this.
+
+room:
+  width_m: 11.4              # left wall 5.60-5.66 m from spine, right 5.75-5.81
+  spine_length_m: 7.0        # start_pose to spine_top
+  rung_count: 5              # top full-width + 3 between rows + back rung
+  table_rows_per_side: 4
+  # Right arms measured 5.50 / 5.52 m at rungs 2 and 3. Rung 1 right measured
+  # 4.82 m -- something was parked in that aisle, so treat its far end as
+  # unverified rather than as a real wall.
+  notes:
+    - "Screen stand at the top of the spine was MOVED mid-session. Its legs are
+       in the map at low probability at the old spot. Expect it somewhere near
+       the front wall tomorrow; it is a movable obstacle, not structure."
+    - "Map frame is rotated ~6.5 deg from the room axes: the start heading is
+       6.5 deg left of the true aisle direction. The map is internally
+       consistent -- this affects nothing in nav2, only hand-reading of coords."
